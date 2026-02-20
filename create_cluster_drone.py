@@ -4,30 +4,32 @@ import open3d as o3d
 from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 
-# ----------- Settings -----------
-PLY_FILE = "data/test data/2nddrone.ply"  # full scene
-OUTPUT_DIR = "clusters_data"               # where cluster_*.ply will be saved
+# ----------- 設定 -----------
+PLY_FILE = "data/test data/2nddrone.ply"  # フルシーン点群
+OUTPUT_DIR = "clusters_data"              # cluster_*.ply の保存先
 
-# Preprocessing
-VOXEL_SIZE = 0.02 #for drone (0.02~0.04)/for realsense (0.0008~0.01)
-PLANE_DIST_THRESH = 0.015 #for drone (0.015~0.02)/for realsense (0.004~0.006)
+# 前処理
+VOXEL_SIZE = 0.02  # drone用 (0.02~0.04) / realsense用 (0.0008~0.01)
+PLANE_DIST_THRESH = 0.015  # drone用 (0.015~0.02) / realsense用 (0.004~0.006)
 MAX_PLANES_TO_REMOVE = 1
 
-# Outlier removal
+# 外れ値除去
 USE_OUTLIER_REMOVAL = True
 OUTLIER_NB_NEIGHBORS = 20
 OUTLIER_STD_RATIO = 2.0
 
-# DBSCAN
-DBSCAN_EPS = 0.031 #for drone (0.03~0.2)/for realsense (0.023~0.035) // if mannequin and background mix, decrease value
-DBSCAN_MIN_SAMPLES = 10 #for drone (10~20)/for realsense (40~60)
-MIN_POINTS_IN_CLUSTER = 500 #original value 150
+# DBSCAN設定
+DBSCAN_EPS = 0.031  # drone用 (0.03~0.2) / realsense用 (0.023~0.035)
+                    # マネキンと背景が混ざる場合は値を小さくする
+DBSCAN_MIN_SAMPLES = 10  # drone用 (10~20) / realsense用 (40~60)
+MIN_POINTS_IN_CLUSTER = 500  # 元の値は150
 
-# Cluster merging
+# クラスタ統合
 ENABLE_CLUSTER_MERGE = False
-MERGE_DIST = 0.40 #for drone (0.20~0.40)/for realsense (0.08~0.12) // if mannequin breaks into many parts, increase
+MERGE_DIST = 0.40  # drone用 (0.20~0.40) / realsense用 (0.08~0.12)
+                   # マネキンが細かく分割される場合は値を大きくする
 
-# Visualization
+# 可視化
 SHOW_GROUND = True
 GROUND_COLOR = (0.6, 0.6, 0.6)
 # --------------------------------
@@ -37,6 +39,7 @@ def segment_scene_with_dbscan(points,
                               eps=DBSCAN_EPS,
                               min_samples=DBSCAN_MIN_SAMPLES,
                               min_points=MIN_POINTS_IN_CLUSTER):
+    # DBSCANでクラスタリングし、一定点数以上のクラスタのみ保持
     clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points)
     labels = clustering.labels_
     unique_labels = set(labels)
@@ -53,6 +56,7 @@ def segment_scene_with_dbscan(points,
 
 
 def merge_close_clusters(clusters_dict, merge_dist=MERGE_DIST):
+    # 重心距離が近いクラスタを統合する
     labels = list(clusters_dict.keys())
     used = set()
     merged_clusters = []
@@ -83,9 +87,9 @@ def extract_dominant_planes(pcd,
                             dist_thresh=PLANE_DIST_THRESH,
                             max_planes=MAX_PLANES_TO_REMOVE):
     """
-    Extract dominant planes (as a single combined point cloud) and return:
-      - plane_pcd: all plane points (ground/wall)
-      - non_plane_pcd: remaining points to cluster
+    主要な平面（地面・壁など）を抽出し、以下を返す：
+      - plane_pcd: 抽出された全ての平面点群
+      - non_plane_pcd: クラスタリング対象となる残り点群
     """
     current = pcd
     plane_parts = []
@@ -123,57 +127,57 @@ def extract_dominant_planes(pcd,
 def main():
     pcd = o3d.io.read_point_cloud(PLY_FILE)
     if len(pcd.points) == 0:
-        print("[ERROR] Point cloud is empty.")
+        print("[ERROR] 点群が空です。")
         return
-    print(f"[INFO] Loaded {len(pcd.points)} points from {PLY_FILE}")
+    print(f"[INFO] {PLY_FILE} から {len(pcd.points)} 点を読み込みました")
 
-    # Downsample
+    # ダウンサンプリング
     pcd = pcd.voxel_down_sample(voxel_size=VOXEL_SIZE)
-    print(f"[INFO] After voxel downsample: {len(pcd.points)} points")
+    print(f"[INFO] ボクセルダウンサンプリング後: {len(pcd.points)} 点")
 
-    # Outlier removal
+    # 外れ値除去
     if USE_OUTLIER_REMOVAL:
         pcd, ind = pcd.remove_statistical_outlier(
             nb_neighbors=OUTLIER_NB_NEIGHBORS,
             std_ratio=OUTLIER_STD_RATIO
         )
-        print(f"[INFO] After outlier removal: {len(pcd.points)} points")
+        print(f"[INFO] 外れ値除去後: {len(pcd.points)} 点")
 
-    # Extract planes but KEEP them for visualization
+    # 平面抽出（可視化用に保持）
     plane_pcd, obj_pcd = extract_dominant_planes(pcd)
 
     obj_points = np.asarray(obj_pcd.points)
     if obj_points.shape[0] == 0:
-        print("[ERROR] No object points left after plane extraction.")
+        print("[ERROR] 平面抽出後に物体点群が存在しません。")
         return
 
-    print(f"[INFO] Object points for DBSCAN: {obj_points.shape[0]}")
-    print(f"[DEBUG] Scale: min={obj_points.min(axis=0)}, max={obj_points.max(axis=0)}")
+    print(f"[INFO] DBSCAN対象点数: {obj_points.shape[0]}")
+    print(f"[DEBUG] スケール範囲: min={obj_points.min(axis=0)}, max={obj_points.max(axis=0)}")
 
-    # DBSCAN on non-plane points
+    # 平面以外の点群に対してDBSCANを実行
     clusters_dict = segment_scene_with_dbscan(obj_points)
-    print(f"[INFO] DBSCAN found {len(clusters_dict)} valid clusters")
+    print(f"[INFO] DBSCANにより {len(clusters_dict)} 個の有効クラスタを検出")
 
     if ENABLE_CLUSTER_MERGE and len(clusters_dict) > 0:
         clusters_list = merge_close_clusters(clusters_dict, merge_dist=MERGE_DIST)
-        print(f"[INFO] After merging: {len(clusters_list)} clusters")
+        print(f"[INFO] 統合後クラスタ数: {len(clusters_list)}")
     else:
         clusters_list = list(clusters_dict.values())
 
-    # Prepare output dir
+    # 出力フォルダ作成
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     colors = plt.get_cmap("tab10").colors
     vis_geoms = []
 
-    # Add ground/plane for visualization
+    # 地面（平面）を可視化に追加
     if SHOW_GROUND and len(plane_pcd.points) > 0:
         plane_vis = o3d.geometry.PointCloud(plane_pcd)
         plane_vis.paint_uniform_color(GROUND_COLOR)
         vis_geoms.append(plane_vis)
 
-    # Save clusters + add to visualization
+    # 各クラスタを保存＋可視化
     for i, cluster_pts in enumerate(clusters_list):
-        print(f"[CLUSTER {i}] size: {cluster_pts.shape[0]} points")
+        print(f"[CLUSTER {i}] 点数: {cluster_pts.shape[0]}")
 
         cluster_pcd = o3d.geometry.PointCloud()
         cluster_pcd.points = o3d.utility.Vector3dVector(cluster_pts)
@@ -184,9 +188,9 @@ def main():
 
         vis_geoms.append(cluster_pcd)
 
-    print(f"[INFO] Saved {len(clusters_list)} clusters to '{OUTPUT_DIR}'")
+    print(f"[INFO] {len(clusters_list)} 個のクラスタを '{OUTPUT_DIR}' に保存しました")
 
-    # Visualize: ground + clusters together
+    # 地面＋クラスタを同時に可視化
     if len(vis_geoms) > 0:
         o3d.visualization.draw_geometries(vis_geoms)
 
