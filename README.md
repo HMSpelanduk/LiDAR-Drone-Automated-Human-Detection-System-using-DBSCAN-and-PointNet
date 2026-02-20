@@ -53,16 +53,16 @@ LiDAR-Drone-Automated-Human-Detection-System-using-DBSCAN-and-PointNet/
                                 # 学習済みモデル重み（gitでは無視）
 
 ```
-## 📌 学習から検出までの処理フロー
+## 学習から検出までの処理フロー
 
 ```bash
 PLY取得
    ↓
    LiDARセンサから取得したフルシーンの点群データ（.ply形式）を準備する。
 
-DBSCANクラスタリング
+DBSCANクラスタリング (create_cluster_drone.ply)
    ↓
-   点群データにDBSCANを適用し、シーン内の物体ごとにクラスタを分割する。
+   create_cluster_drone.plyを使用し、点群データにDBSCANを適用し、シーン内の物体ごとにクラスタを分割する。
    地面・背景・マネキンなどが個別クラスタとして抽出される。
 
 マネキン / 背景を手動分類
@@ -101,5 +101,9 @@ test_*.py で新規データ検出
    Pythonコード内でファイル名を指定する。
 
 ```
-## 🎯📊検出結果例
-![Image alt](image_name.png)
+## 検出結果例
+![Image alt](https://github.com/HMSpelanduk/LiDAR-Drone-Automated-Human-Detection-System-using-DBSCAN-and-PointNet/blob/638ffe2beac7cfd3d01342af49a3a561c9a32164/result_screenshot.png)
+
+左：LiDARセンサから取得した元の点群データ。
+
+右：学習済みTinyPointNetモデルによる検出結果（マネキンを赤色で表示）。
