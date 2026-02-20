@@ -16,9 +16,11 @@ pip install open3d
 pip install scikit-learn
 pip install matplotlib
 pip install torch torchvision torchaudio
+```
 
-## Project Structure
+## プロジェクト構成
 
+```bash
 LiDAR-Drone-Automated-Human-Detection-System-using-DBSCAN-and-PointNet/
 │
 ├── .venv/                      # Python仮想環境（gitでは無視）
@@ -49,3 +51,51 @@ LiDAR-Drone-Automated-Human-Detection-System-using-DBSCAN-and-PointNet/
 │
 └── pointnet_mannequin_classifier.pth
                                 # 学習済みモデル重み（gitでは無視）
+
+```
+## 📌 学習から検出までの処理フロー
+
+```bash
+PLY取得
+   ↓
+   LiDARセンサから取得したフルシーンの点群データ（.ply形式）を準備する。
+
+DBSCANクラスタリング
+   ↓
+   点群データにDBSCANを適用し、シーン内の物体ごとにクラスタを分割する。
+   地面・背景・マネキンなどが個別クラスタとして抽出される。
+
+マネキン / 背景を手動分類
+   ↓
+   抽出されたクラスタの中からマネキンと背景物体を選択し、
+   data/mannequin/ と data/background/ に保存する。
+   この作業を繰り返し、十分なデータ数（例：各50件）を収集する。
+
+prepare_dataset.py
+   ↓
+   .plyデータを正規化済みの .npy 形式へ変換する。
+   中心化・スケーリング・点数統一を行い、学習用データセットを作成する。
+
+train_pointnet.py
+   ↓
+   TinyPointNetモデルを用いて .npy データを学習する。
+   背景（label 0）とマネキン（label 1）を分類できるように訓練する。
+
+pointnet_mannequin_classifier.pth 生成
+   ↓
+   学習完了後、人物検出用の学習済みモデルが生成される。
+   これが本システムの検出モデルとなる。
+
+check_model.py（任意：動作確認）
+   ↓
+   学習済みモデルがデータを正しく分類できているかを簡易的に確認する。
+   data_npy/background と data_npy/mannequin を入力し、予測確率と予測クラスを表示する。
+
+test_*.py で新規データ検出
+   ↓
+   学習済みモデルを用いて新しいLiDARデータを検出する。
+   ・test_better_pointnet.py → 最も確率の高いマネキン1体のみ検出
+   ・test_multiple_pointnet.py → 複数のマネキンを同時に検出
+
+※ テストを行う場合は .ply ファイルを data/test data/ に配置し、
+   Pythonコード内でファイル名を指定する。
