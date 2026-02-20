@@ -1,0 +1,17 @@
+.idea/
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+
+
+
+# Data & models
+data/
+data_npy/
+clusters/
+clusters_data/
+room_clusters/
+*.pth
